@@ -1,0 +1,62 @@
+---
+title: "01"
+format: pdf
+editor: visual
+---
+
+## mlr3
+
+Please head to https://github.com/mlr-org/mlr3 which has several useful links in the README.
+
+## Prerequisite
+
+```{r}
+install.packages("mlr3verse")
+install.packages("usethis")
+```
+
+We recommend adding the mlr-org R-universe to your R options so you can install all packages with install.packages(), without having to worry which package repository it comes from. To do this, install usethis and run the following:
+
+```{r}
+#| echo: false
+usethis::edit_r_profile()
+```
+
+As well as packages within the mlr3 ecosystem, software in the mlr3verse also depends on the following popular and well-established packages:
+
+-   R6
+
+-   data.table
+
+-   digest
+
+-   uuid
+
+-   lgr
+
+-   mlbench
+
+-   evaluate
+
+-   future
+
+### `data.table` for beginners
+
+```{r}
+library(data.table)
+as.data.table(matrix(runif(4), 2, 2))
+```
+
+```{r}
+dt = data.table(x = 1:6, y = rep(letters[1:3], each = 2))
+dt
+```
+
+```{r}
+dt[, mean(x), by='y']
+```
+
+```{r}
+dt[, z := x * 3]
+dt
+```

@@ -1,0 +1,366 @@
+---
+title: "02"
+format: html
+editor: visual
+---
+
+## chapter 02
+
+In this chapter, we will introduce the mlr3 objects and corresponding R6 classes that implement the essential building blocks of machine learning. These building blocks include the data (and the methods for creating training and test sets), the machine learning algorithm (and its training and prediction process), the configuration of a machine learning algorithm through its hyper parameters, and evaluation measures to assess the quality of predictions.
+
+> Machine learning algorithms are called `learners` in `mlr3`
+
+**Tasks** : are objects that contain the (usually tabular) data and additional metadata that define a machine learning problem. The metadata contain, for example, the name of the target feature for supervised machine learning problems. This information is extracted automatically when required, so the user does not have to specify the prediction target every time a model is trained, for example.
+
+```{r}
+library(mlr3)
+tsk_mtcars = tsk("mtcars")
+tsk_mtcars
+```
+
+### Regression Task
+
+```{r}
+data("mtcars", package = "datasets")
+mtcars_subset = subset(mtcars, select = c("mpg", "cyl", "disp")) 
+
+# mpg :  Miles/(US) gallon
+# cyl :  Number of cylinders
+# disp :  Displacement (cu.in.)
+str(mtcars_subset)
+```
+
+mtcars data set : <https://www.rdocumentation.org/packages/datasets/versions/3.6.2/topics/mtcars>
+
+```{r}
+tsk_mtcars = as_task_regr(mtcars_subset, target = "mpg" , id = "cars")
+tsk_mtcars
+```
+
+> **Note :** The data can be in any tabular format
+>
+> -   data.frame()
+>
+> -   data.table()
+>
+> -   tibble()
+
+> As many machine learning models do not work properly with arbitrary `UTF8` names, `mlr3` defaults to throwing an error if any of the column names passed to `as_task_regr()` (and other task constructors) contain a `non-ASCII` character or do not comply with R's variable naming scheme. Therefore, we recommend converting names with `make.names()` if possible. You can bypass this check by setting options(`mlr3.allow_utf8_names = TRUE`) (but do not be surprised if errors occur).
+
+Lets plot the task :
+
+```{r}
+library(mlr3viz)
+autoplot(tsk_mtcars, type = "pairs")
+```
+
+### Retrieving Data
+
+```{r}
+c(tsk_mtcars$nrow, tsk_mtcars$ncol)
+```
+
+```{r}
+c(Features = tsk_mtcars$feature_names,
+  Target = tsk_mtcars$target_names
+  )
+```
+
+```{r}
+head(tsk_mtcars$row_ids)
+```
+
+$Some Syntax$
+
+``` r
+task = as_task_regr(data.frame(x = runif(5), y = runif(5)),
+                    target = "y")
+task$row_ids
+
+task$filter(c(4, 1, 3))
+task$row_ids
+```
+
+retrieve all data:
+
+```{r}
+tsk_mtcars$data()
+```
+
+```{r}
+tsk_mtcars$data(rows = c(1, 5, 10), cols = tsk_mtcars$feature_names)
+```
+
+```{r}
+tsk_mtcars$data(rows = c(1, 5, 10), cols = c("mpg"))
+```
+
+```{r}
+summary(as.data.table(tsk_mtcars))
+```
+
+### Task Mutators
+
+Subsetting the features and rows:
+
+```{r}
+tsk_mtcars_small = tsk("mtcars")
+tsk_mtcars_small$select("cyl") # Keep only cyl
+tsk_mtcars_small$filter(2:3) # Keep only 2 - 3 ids
+tsk_mtcars_small$data()
+
+```
+
+```{r}
+tsk_mtcars$head()
+```
+
+As R6 uses reference semantics (Section 1.5.1), you need to use \$clone() if you want to modify a task whilst keeping the original object intact.
+
+```{r}
+tsk_mtcars = tsk("mtcars")
+tsk_mtcars_right = tsk_mtcars$clone()
+tsk_mtcars_right$filter(1:2)
+# original data unaffected
+tsk_mtcars$head()
+```
+
+Add extra rows and columns :
+
+```{r}
+tsk_mtcars_small$cbind( # add Columns
+    data.frame(disp = c(150, 169))
+  )
+tsk_mtcars_small$rbind( # add rows
+    data.frame(mpg = 23, cyl = 5, disp = 170)
+  )
+tsk_mtcars_small$data()
+```
+
+### Learners
+
+> The `mlr_learners` dictionary contains all the learners available in `mlr3`.
+
+```{r}
+lrn("regr.rpart")
+```
+
+#### #Training Phase
+
+```{r}
+tsk_mtcars = tsk("mtcars")
+# load a regression tree
+lrn_rpart = lrn("regr.rpart")
+# pass the task to the learner
+lrn_rpart$train(tsk_mtcars)
+```
+
+```{r}
+# Inspect the model
+lrn_rpart$model
+```
+
+```{r}
+lrn_rpart$help()
+```
+
+```{r}
+splits = partition(tsk_mtcars)
+splits
+```
+
+> The `partition()` function : This function randomly splits the given task into two disjoint sets: a training set (`67%` of the total data by default) and a test set (the remaining `33%` of the total data not in the training set).
+
+```{r}
+lrn_rpart$train(tsk_mtcars, row_ids = splits$train)
+lrn_rpart
+```
+
+```{r}
+lrn_rpart$model
+```
+
+```{r}
+prediction = lrn_rpart$predict(tsk_mtcars, row_ids = splits$test)
+prediction
+```
+
+```{r}
+autoplot(prediction)
+```
+
+> `model$predict(arg)` \# args is task object
+>
+> `model$predict_newdata(arg)` \# arg can be `dataframe`
+
+```{r}
+mtcars_new = data.table(cyl = c(5, 6), disp = c(100, 120),
+hp = c(100, 150), drat = c(4, 3.9), wt = c(3.8, 4.1),
+qsec = c(18, 19.5), vs = c(1, 0), am = c(1, 1),
+gear = c(6, 4), carb = c(3, 5))
+prediction = lrn_rpart$predict_newdata(mtcars_new)
+prediction
+```
+
+To changing the Prediction type( loss function ):
+
+```{r}
+library(mlr3learners)
+lrn_lm = lrn("regr.lm", predict_type = "se")
+lrn_lm$train(tsk_mtcars, splits$train)
+lrn_lm$predict(tsk_mtcars, splits$test)
+```
+
+### Hyperparameters
+
+```{r}
+lrn_rpart$param_set
+```
+
+The output is `ParamSet` object. These objects provide information on hyper parameters including their name (id), data type (class), acceptable ranges for hyper parameter values (lower, upper), the number of levels possible if the data type is categorical (nlevels), the default value from the underlying package (default), and finally the set value (value). The second column references classes defined in paradox that determine the class of the parameter and the possible values it can take.
+
+```{r}
+lrn_rpart = lrn("regr.rpart", maxdepth = 1)
+```
+
+At the above code we set `maxdepth` hyper parameter as 1.\
+
+To see non-default parameters :
+
+```{r}
+lrn_rpart$param_set$values
+```
+
+or :
+
+```{r}
+lrn_rpart$param_set$set_values(xval = 2, cp = 0.5)
+lrn_rpart$param_set$values
+```
+
+#### Hyper parmeters Dependencies
+
+More complex hyper parameter spaces may include dependencies, which occur when setting a hyper parameter is conditional on the value of another hyper parameter; this is most important in the context of model tuning. One such example is a support vector machine (lrn("regr.svm")). The field \$deps returns a data.table, which lists the hy- perparameter dependencies in the Learner.
+
+```{r}
+library(mlr3learners)
+lrn("regr.svm")$param_set$deps
+```
+
+```{r}
+lrn("regr.svm")$param_set$deps[[1, "cond"]]
+```
+
+### Base Line Learners
+
+```{r}
+df = as_task_regr(data.frame(x = runif(1000), y = rnorm(1000, 2, 1)),
+target = "y")
+lrn("regr.featureless")$train(df, 1:995)$predict(df, 996:1000)
+```
+
+### Evaluation
+
+#### Measures
+
+```{r}
+as.data.table(msr())
+```
+
+All measures implemented in `mlr3` are defined primarily by three components:
+
+1.  The function that defines the measure
+2.  Whether a lower or higher value is considered 'good'
+3.  The range of possible values the measure can take.
+
+```{r}
+measure = msr("regr.mae")
+measure
+```
+
+```{r}
+prediction
+```
+
+```{r}
+prediction$score(measure)
+```
+
+```{r}
+measures = msrs(c("regr.mse", "regr.mae"))
+prediction$score(measures)
+```
+
+> Some Technical Measures:
+>
+> -   `msr("time train")`
+>
+> -   `msr("time_predict")`
+>
+> -   `msr("time_both")`
+>
+> -   `msr("selected_features")`
+
+### Classification Problems
+
+```{r}
+library(mlr3)
+set.seed(349)
+# load and partition our task
+tsk_penguins = tsk("penguins")
+splits = partition(tsk_penguins)
+# load featureless learner
+lrn_featureless = lrn("classif.featureless")
+# load decision tree with different hyperparameters
+lrn_rpart = lrn("classif.rpart", cp = 0.2, maxdepth = 5)
+# load accuracy measure
+measure = msr("classif.acc")
+# train learners
+lrn_featureless$train(tsk_penguins, splits$train)
+lrn_rpart$train(tsk_penguins, splits$train)
+# make and score predictions
+lrn_featureless$predict(tsk_penguins, splits$test)$score(measure)
+```
+
+```{r}
+lrn_rpart$predict(tsk_penguins, splits$test)$score(measure)
+```
+
+You can view the predefined classification tasks in `mlr3` by filtering the `mlr_tasks` dictionary:
+
+```{r}
+as.data.table(mlr_tasks)[task_type == "classif"]
+```
+
+```{r}
+tsk_penguins$class_names
+```
+
+```{r}
+library(ggplot2)
+library(mlr3viz)
+autoplot(tsk("penguins"), type = "duo") +
+  ggplot2::theme(strip.text.y = ggplot2::element_text(angle = -45, size = 8))
+```
+
+```{r}
+lrn_rpart = lrn("classif.rpart", predict_type = "prob")
+lrn_rpart$train(tsk_penguins, splits$train)
+prediction = lrn_rpart$predict(tsk_penguins, splits$test)
+prediction
+```
+
+```{r}
+measures = msrs(c("classif.mbrier", "classif.logloss", "classif.acc"))
+prediction$score(measures)
+```
+
+#### Confusion Matrix
+
+```{r}
+prediction$confusion
+```
+
+```{r}
+autoplot(prediction)
+```
